@@ -1,0 +1,14 @@
+.env
+.env.*
+!env.example
+secrets/
+*.p12
+*.jks
+*.crt
+*.csr
+*.key
+*.pem
+node_modules/
+dist/
+coverage/
+.vite/

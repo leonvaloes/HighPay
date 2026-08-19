@@ -1,0 +1,57 @@
+services:
+
+  payment-service:
+    environment:
+      SERVER_PORT: 8443
+      SERVER_SSL_ENABLED: "true"
+      SERVER_SSL_KEY_STORE: /run/secrets/payment_service_keystore
+      SERVER_SSL_KEY_STORE_PASSWORD: ${PAYMENT_SERVICE_KEYSTORE_PASSWORD:?Set PAYMENT_SERVICE_KEYSTORE_PASSWORD}
+      SERVER_SSL_KEY_STORE_TYPE: PKCS12
+      SERVER_SSL_TRUST_STORE: /run/secrets/highpay_truststore
+      SERVER_SSL_TRUST_STORE_PASSWORD: ${HIGHPAY_TRUSTSTORE_PASSWORD:?Set HIGHPAY_TRUSTSTORE_PASSWORD}
+      SERVER_SSL_TRUST_STORE_TYPE: PKCS12
+      SERVER_SSL_CLIENT_AUTH: want
+      HIGHPAY_INTERNAL_AUTH_MODE: mtls
+      HIGHPAY_INTERNAL_AUTH_TOKEN: disabled-by-mtls
+
+    secrets:
+      - payment_service_keystore
+      - highpay_truststore
+
+    ports:
+      - "8443:8443"
+
+
+  payment-processor:
+    environment:
+      HIGHPAY_PAYMENT_SERVICE_BASE_URL: https://payment-service:8443
+      HIGHPAY_PAYMENT_SERVICE_TLS_ENABLED: "true"
+      HIGHPAY_PAYMENT_SERVICE_TLS_KEY_STORE: /run/secrets/payment_processor_keystore
+      HIGHPAY_PAYMENT_SERVICE_TLS_KEY_STORE_PASSWORD: ${PAYMENT_PROCESSOR_KEYSTORE_PASSWORD:?Set PAYMENT_PROCESSOR_KEYSTORE_PASSWORD}
+      HIGHPAY_PAYMENT_SERVICE_TLS_KEY_STORE_TYPE: PKCS12
+      HIGHPAY_PAYMENT_SERVICE_TLS_TRUST_STORE: /run/secrets/highpay_truststore
+      HIGHPAY_PAYMENT_SERVICE_TLS_TRUST_STORE_PASSWORD: ${HIGHPAY_TRUSTSTORE_PASSWORD:?Set HIGHPAY_TRUSTSTORE_PASSWORD}
+      HIGHPAY_PAYMENT_SERVICE_TLS_TRUST_STORE_TYPE: PKCS12
+
+    secrets:
+      - payment_processor_keystore
+      - highpay_truststore
+
+
+  payment-service-gateway:
+    volumes:
+      - ./load-balancer/payment-service/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+
+
+  prometheus:
+    volumes:
+      - ./observability/prometheus/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+
+
+secrets:
+  payment_service_keystore:
+    file: ./secrets/mtls/payment-service.p12
+  payment_processor_keystore:
+    file: ./secrets/mtls/payment-processor.p12
+  highpay_truststore:
+    file: ./secrets/mtls/highpay-truststore.p12

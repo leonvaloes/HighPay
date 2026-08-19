@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  labels:
+    app: payment-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+        - name: payment-service
+          image: highpay/payment-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          env:
+            - name: SERVER_PORT
+              value: "8081"
+            - name: HIGHPAY_INTERNAL_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: internal-auth-token
+            - name: HIGHPAY_PUBLIC_AUTH_ENABLED
+              value: "false"
+            - name: HIGHPAY_PUBLIC_AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: public-jwt-secret
+            - name: HIGHPAY_PUBLIC_AUTH_ISSUER
+              value: highpay-local
+            - name: HIGHPAY_CORS_ALLOWED_ORIGINS
+              value: http://highpay.local,http://localhost:5173,http://localhost:3001
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/highpay
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: postgres-user
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: postgres-password
+            - name: SPRING_RABBITMQ_HOST
+              value: rabbitmq
+            - name: SPRING_RABBITMQ_PORT
+              value: "5672"
+            - name: SPRING_RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: rabbitmq-user
+            - name: SPRING_RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: rabbitmq-password
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  labels:
+    app: payment-service
+spec:
+  selector:
+    app: payment-service
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081

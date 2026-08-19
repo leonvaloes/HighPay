@@ -1,0 +1,29 @@
+groups:
+  - name: highpay
+    rules:
+      - alert: HighPayServiceDown
+        expr: up{job=~"payment-service|payment-processor|provider-simulator"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HighPay service is down"
+          description: "{{ $labels.job }} has not been scrapeable for more than 1 minute."
+
+      - alert: HighPayPaymentProcessingFailures
+        expr: increase(highpay_processor_processing_failed_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Payment processor failures detected"
+          description: "The processor recorded payment processing failures in the last 5 minutes."
+
+      - alert: HighPayOutboxPublishFailures
+        expr: increase(highpay_outbox_event_failed_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox publish failures detected"
+          description: "The payment-service failed to publish outbox events in the last 5 minutes."

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: provider-simulator
+  labels:
+    app: provider-simulator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: provider-simulator
+  template:
+    metadata:
+      labels:
+        app: provider-simulator
+    spec:
+      containers:
+        - name: provider-simulator
+          image: highpay/provider-simulator:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+          env:
+            - name: SERVER_PORT
+              value: "8083"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: provider-simulator
+  labels:
+    app: provider-simulator
+spec:
+  selector:
+    app: provider-simulator
+  ports:
+    - name: http
+      port: 8083
+      targetPort: 8083

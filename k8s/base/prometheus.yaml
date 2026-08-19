@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - /etc/prometheus/rules/highpay-alerts.yml
+
+    scrape_configs:
+      - job_name: payment-service
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets:
+              - payment-service:8081
+
+      - job_name: payment-processor
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets:
+              - payment-processor:8082
+
+      - job_name: provider-simulator
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets:
+              - provider-simulator:8083
+
+  highpay-alerts.yml: |
+    groups:
+      - name: highpay
+        rules:
+          - alert: HighPayServiceDown
+            expr: up{job=~"payment-service|payment-processor|provider-simulator"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "HighPay service is down"
+              description: "{{ $labels.job }} has not been scrapeable for more than 1 minute."
+
+          - alert: HighPayPaymentProcessingFailures
+            expr: increase(highpay_processor_processing_failed_total[5m]) > 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Payment processor failures detected"
+              description: "The processor recorded payment processing failures in the last 5 minutes."
+
+          - alert: HighPayOutboxPublishFailures
+            expr: increase(highpay_outbox_event_failed_total[5m]) > 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Outbox publish failures detected"
+              description: "The payment-service failed to publish outbox events in the last 5 minutes."
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.8.0
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+          ports:
+            - name: http
+              containerPort: 9090
+          volumeMounts:
+            - name: prometheus-config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+            - name: prometheus-config
+              mountPath: /etc/prometheus/rules/highpay-alerts.yml
+              subPath: highpay-alerts.yml
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090

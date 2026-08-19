@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-processor
+  labels:
+    app: payment-processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payment-processor
+  template:
+    metadata:
+      labels:
+        app: payment-processor
+    spec:
+      containers:
+        - name: payment-processor
+          image: highpay/payment-processor:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8082
+          env:
+            - name: SERVER_PORT
+              value: "8082"
+            - name: HIGHPAY_INTERNAL_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: internal-auth-token
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/highpay
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: postgres-user
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: postgres-password
+            - name: SPRING_RABBITMQ_HOST
+              value: rabbitmq
+            - name: SPRING_RABBITMQ_PORT
+              value: "5672"
+            - name: SPRING_RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: rabbitmq-user
+            - name: SPRING_RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: highpay-secrets
+                  key: rabbitmq-password
+            - name: HIGHPAY_PAYMENT_SERVICE_BASE_URL
+              value: http://payment-service:8081
+            - name: HIGHPAY_PAYMENT_SERVICE_REQUEST_TIMEOUT_MS
+              value: "15000"
+            - name: HIGHPAY_PROVIDER_BASE_URL
+              value: http://provider-simulator:8083
+            - name: HIGHPAY_PROVIDER_REQUEST_TIMEOUT_MS
+              value: "15000"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-processor
+  labels:
+    app: payment-processor
+spec:
+  selector:
+    app: payment-processor
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
